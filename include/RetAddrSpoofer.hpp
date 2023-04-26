@@ -61,7 +61,7 @@ namespace RetAddrSpoofer {
 			Protect(callInstruction, absPushLength + length, PROT_READ | PROT_WRITE | PROT_EXEC);
 
 			// Move call instruction back
-			memcpy(callInstruction + absPushLength, callInstruction, length);
+			memmove(callInstruction + absPushLength, callInstruction, length);
 
 			*callInstruction = 0x48; // mov rax, address
 			*(callInstruction + 1) = 0xB8;
