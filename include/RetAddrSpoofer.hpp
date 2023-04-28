@@ -5,6 +5,7 @@
 #include <mutex>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <atomic>
 
 namespace RetAddrSpoofer {
 
@@ -97,7 +98,7 @@ namespace RetAddrSpoofer {
 
 	template<typename Ret, typename... Args>
 	static __attribute((noinline)) Ret Invoke(void* method, Args... args) {
-		static bool mutated = false;
+		static std::atomic<bool> mutated = false;
 		static std::mutex mutex;
 
 		if (!mutated) {
