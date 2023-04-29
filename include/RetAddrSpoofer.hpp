@@ -44,7 +44,7 @@ namespace RetAddrSpoofer {
 				continue;
 			}
 
-			int callRegisterOffset = 1;
+			size_t callRegisterOffset = 1;
 
 			// Call r8-r15 instructions have a 0x41 modifier
 			if (*(callInstruction - 1) == 0x41) {
@@ -53,7 +53,7 @@ namespace RetAddrSpoofer {
 			}
 
 			// Search the first nop instruction
-			int length = callRegisterOffset + 1 /* Register is one byte */;
+			size_t length = callRegisterOffset + 1 /* Register is one byte */;
 			while (*(callInstruction + length) != 0x90)
 				length++;
 
@@ -62,7 +62,10 @@ namespace RetAddrSpoofer {
 			Protect(callInstruction, absPushLength + length, PROT_READ | PROT_WRITE | PROT_EXEC);
 
 			// Move call instruction back
-			memmove(callInstruction + absPushLength, callInstruction, length);
+			// Don't use memcpy here, because certain implementations use optimizations which can't be applied here.
+			for(size_t index = 0; index < length; index++) {
+				*(callInstruction + absPushLength + index) = *(callInstruction + index);
+			}
 
 			*callInstruction = 0x48; // mov rax, address
 			*(callInstruction + 1) = 0xB8;
