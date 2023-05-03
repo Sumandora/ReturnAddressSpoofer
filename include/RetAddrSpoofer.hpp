@@ -22,7 +22,8 @@ namespace RetAddrSpoofer {
 		void Protect(const void* addr, const size_t length, const int prot) {
 			const size_t pagesize = getpagesize();
 			void* aligned = (void*) (((size_t) addr) & ~(pagesize - 1));
-			mprotect(aligned, length - (length % pagesize) + pagesize, prot);
+			const size_t alignDifference = (char*)addr - (char*)aligned;
+			mprotect(aligned, alignDifference + length, prot);
 		}
 
 		void MutateNextCall(void* instruction) {
