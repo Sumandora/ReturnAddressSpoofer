@@ -83,6 +83,11 @@ namespace RetAddrSpoofer {
 		__attribute((noinline, optimize("O0"))) Ret _Invoke(void* method, Args... args) {
 			// This call will later be substituted by push+jmp instructions
 			reinterpret_cast<Ret (*)(Args...)>(method)(args...);
+
+			// The compiler warns us about the missing return, but this function won't appear on
+			// the call stack and is never returned to.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-type"
 			// We need 11 more bytes for the push instruction
 			__asm(
 					"nop;"
@@ -98,6 +103,7 @@ namespace RetAddrSpoofer {
 					"nop;");
 			// Indirect return, carrying the return value of method
 		}
+#pragma GCC diagnostic pop
 	}
 
 	template<typename Ret, typename... Args>
