@@ -1,5 +1,5 @@
-#ifndef RETADDRSPOOFER
-#define RETADDRSPOOFER
+#ifndef RETADDRSPOOFER_HPP
+#define RETADDRSPOOFER_HPP
 
 #include <cstring>
 #include <mutex>
