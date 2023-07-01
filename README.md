@@ -29,7 +29,7 @@ make
 ```
 
 ## How it works
-The return address spoofer works by replacing the call instruction to the target function with a push and jmp instruction. The call instruction pushes the return address on the stack and then jmps to the target function, by replacing the call instruction we get the freedom to specify anything as the return address.
+The return address spoofer works by calling a naked stub function, which will then pop the real return address and push another one. Because GCC does not allow to generate this assembly naturally, we are required to use some hacks involving the rbx register.
 
 ## Compatibility
 It is compatible with 64-bit GCC  
