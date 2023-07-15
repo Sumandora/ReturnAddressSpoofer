@@ -14,17 +14,34 @@ namespace RetAddrSpoofer {
 	 */
 	extern void* leaveRet;
 
-	template <typename Ret>
-	inline Ret __attribute((naked)) Invoke(std::uintptr_t rdi, std::uintptr_t rsi, std::uintptr_t rdx, std::uintptr_t rcx, std::uintptr_t r8, std::uintptr_t r9, void* functionAddress)
+	inline void __attribute((naked)) _Invoke()
 	{
-		__asm("pop %rax;"
-			  "pop %r10;"
-			  "push %rax;");
+		__asm("pop %rax;" // ret addr
+			  "pop %r10;" // method addr
+		);
 		__asm("push %0"
 			  :
 			  : "m"(leaveRet));
 		__asm("jmp *%r10;");
 	}
+
+#pragma GCC push_options
+#pragma GCC optimize("no-optimize-sibling-calls")
+#pragma GCC optimize("no-omit-frame-pointer")
+	template <
+		typename Ret,
+		typename RDI = std::uintptr_t,
+		typename RSI = std::uintptr_t,
+		typename RDX = std::uintptr_t,
+		typename RCX = std::uintptr_t,
+		typename R8 = std::uintptr_t,
+		typename R9 = std::uintptr_t,
+		typename... StackArgs>
+	inline Ret __attribute((noinline, disable_tail_calls, force_align_arg_pointer)) Invoke(RDI rdi, RSI rsi, RDX rdx, RCX rcx, R8 r8, R9 r9, void* functionAddress, StackArgs... stackArgs)
+	{
+		return reinterpret_cast<Ret (*)(RDI, RSI, RDX, RCX, R8, R9, void*, StackArgs...)>(_Invoke)(rdi, rsi, rdx, rcx, r8, r9, functionAddress, stackArgs...);
+	}
+#pragma GCC pop_options
 
 }
 #endif
