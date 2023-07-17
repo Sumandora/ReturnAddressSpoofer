@@ -1,11 +1,12 @@
 #ifndef RETADDRSPOOFER_HPP
 #define RETADDRSPOOFER_HPP
 
+#include <atomic>
+#include <cstdio>
 #include <cstring>
 #include <mutex>
 #include <sys/mman.h>
 #include <unistd.h>
-#include <atomic>
 
 namespace RetAddrSpoofer {
 
@@ -19,14 +20,16 @@ namespace RetAddrSpoofer {
 	extern void* leaveRet;
 
 	namespace {
-		void Protect(const void* addr, const size_t length, const int prot) {
+		void Protect(const void* addr, const size_t length, const int prot)
+		{
 			const size_t pagesize = getpagesize();
-			void* aligned = (void*) (((size_t) addr) & ~(pagesize - 1));
+			void* aligned = (void*)(((size_t)addr) & ~(pagesize - 1));
 			const size_t alignDifference = (char*)addr - (char*)aligned;
 			mprotect(aligned, alignDifference + length, prot);
 		}
 
-		void MutateNextCall(void* instruction) {
+		void __attribute((optimize("O0"))) MutateNextCall(void* instruction)
+		{
 			auto* callInstruction = reinterpret_cast<unsigned char*>(instruction);
 
 			while (true) {
@@ -41,7 +44,7 @@ namespace RetAddrSpoofer {
 
 				break; // We found the call-instruction
 
-				nextInstruction:
+			nextInstruction:
 				continue;
 			}
 
@@ -76,8 +79,9 @@ namespace RetAddrSpoofer {
 			Protect(callInstruction, absPushLength + length, PROT_READ | PROT_EXEC);
 		}
 
-		template<typename Ret, typename... Args>
-		__attribute((noinline, optimize("O0"))) Ret _Invoke(void* method, Args... args) {
+		template <typename Ret, typename... Args>
+		Ret __attribute((noinline, optimize("O0"))) _Invoke(void* method, Args... args)
+		{
 			// This call will later be substituted by push+jmp instructions
 			reinterpret_cast<Ret (*)(Args...)>(method)(args...);
 
@@ -87,25 +91,26 @@ namespace RetAddrSpoofer {
 #pragma GCC diagnostic ignored "-Wreturn-type"
 			// We need 11 more bytes for the push instruction
 			__asm(
-					"nop;"
-					"nop;"
-					"nop;"
-					"nop;"
-					"nop;"
-					"nop;"
-					"nop;"
-					"nop;"
-					"nop;"
-					"nop;"
-					"nop;");
+				"nop;"
+				"nop;"
+				"nop;"
+				"nop;"
+				"nop;"
+				"nop;"
+				"nop;"
+				"nop;"
+				"nop;"
+				"nop;"
+				"nop;");
 			// Indirect return, carrying the return value of method
 		}
 #pragma GCC diagnostic pop
 	}
 
-	template<typename Ret, typename... Args>
-	static __attribute((noinline)) Ret Invoke(void* method, Args... args) {
-		static std::atomic<bool> mutated = false;
+	template <typename Ret, typename... Args>
+	static Ret __attribute((noinline)) Invoke(void* method, Args... args)
+	{
+		static std::atomic_bool mutated = false;
 		static std::mutex mutex;
 
 		if (!mutated) {
@@ -135,7 +140,7 @@ namespace RetAddrSpoofer {
 			mutex.unlock(); // Allow other threads to continue
 		}
 
-		invocation:
+	invocation:
 
 		return _Invoke<Ret, Args...>(method, args...);
 	}
