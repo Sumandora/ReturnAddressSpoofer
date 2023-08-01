@@ -4,9 +4,9 @@ project(ReturnAddressSpoofer)
 set(CMAKE_CXX_STANDARD 23)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
 
 add_executable(ReturnAddressSpoofer "Example/Main.cpp")
+target_compile_options(ReturnAddressSpoofer PUBLIC "-O2" "-ffunction-sections")
 
 target_include_directories(ReturnAddressSpoofer PUBLIC "Include")
 add_subdirectory("ObjectFileRewriter")
