@@ -1,0 +1,3 @@
+[submodule "ObjectFileRewriter/Dependencies/distorm"]
+	path = ObjectFileRewriter/Dependencies/distorm
+	url = https://github.com/gdabah/distorm.git

@@ -6,5 +6,12 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2")
 
-add_executable(ReturnAddressSpoofer Source/Main.cpp)
-target_include_directories(ReturnAddressSpoofer PRIVATE include)
+add_executable(ReturnAddressSpoofer "Example/Main.cpp")
+
+target_include_directories(ReturnAddressSpoofer PUBLIC "Include")
+add_subdirectory("ObjectFileRewriter")
+add_custom_command(
+	TARGET ${CMAKE_PROJECT_NAME} PRE_LINK
+	COMMAND "$<TARGET_FILE:ObjectFileRewriter>" "${CMAKE_BINARY_DIR}/CMakeFiles/${CMAKE_PROJECT_NAME}.dir"
+	DEPENDS ObjectFileRewriter
+)
