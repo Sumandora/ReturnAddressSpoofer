@@ -33,4 +33,4 @@ The return address spoofer works by replacing the call instruction to the target
 
 ## Compatibility
 It is compatible with 64-bit GCC  
-Clang is not supported due to its unpredictable machine code generation
+Clang is not supported, but worked in multiple tests
