@@ -3,6 +3,7 @@ This is a thread-safe, header-only return address spoofer for x86-64 linux syste
 
 ## Usage
 An example can be found in the Source folder.  
+You have to supply the compiler parameter `-ffunction-sections`.
 
 A minimal example could look like this:
 ```c++
