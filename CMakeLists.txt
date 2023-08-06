@@ -6,9 +6,9 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_library(ReturnAddressSpoofer INTERFACE)
-target_include_directories(ReturnAddressSpoofer INTERFACE "Include")
+target_include_directories(ReturnAddressSpoofer INTERFACE "${PROJECT_SOURCE_DIR}/Include")
 
-add_executable(ReturnAddressSpooferExample "Example/Main.cpp")
+add_executable(ReturnAddressSpooferExample "${PROJECT_SOURCE_DIR}/Example/Main.cpp")
 target_compile_options(ReturnAddressSpooferExample PUBLIC "-O2" "-ffunction-sections")
 target_link_libraries(ReturnAddressSpooferExample PRIVATE ReturnAddressSpoofer)
 
