@@ -21,7 +21,7 @@ namespace RetAddrSpoofer {
 	extern void* leaveRet;
 
 	template <typename Ret, typename... Args>
-	static Ret __attribute((noinline, optimize("O0"))) Invoke(void* method, Args... args)
+	static Ret __attribute((noinline, optimize("O0"))) invoke(void* method, Args... args)
 	{
 		reinterpret_cast<Ret (*)(Args...)>(method)(args...);
 

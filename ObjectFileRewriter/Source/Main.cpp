@@ -18,7 +18,7 @@ enum Result {
 	ALREADY_TRANSFORMED
 };
 
-int InstructionLength(unsigned char* addr)
+int instructionLength(unsigned char* addr)
 {
 	_DecodedInst inst;
 	unsigned int a = 0;
@@ -26,7 +26,7 @@ int InstructionLength(unsigned char* addr)
 	return inst.size;
 }
 
-Result MutateNextCall(std::byte* array, std::uintptr_t offset)
+Result mutateNextCall(std::byte* array, std::uintptr_t offset)
 {
 	unsigned char* addr = reinterpret_cast<unsigned char*>(array + offset);
 	std::deque<unsigned char*> history;
@@ -54,15 +54,15 @@ Result MutateNextCall(std::byte* array, std::uintptr_t offset)
 			unsigned char* firstNop = callInstruction;
 
 			while (*firstNop != 0x90) {
-				firstNop += InstructionLength(firstNop);
+				firstNop += instructionLength(firstNop);
 			}
 
-			std::memcpy(firstNop, callInstruction, InstructionLength(callInstruction));
-			*(firstNop + InstructionLength(firstNop) - 1) += 0x10;
+			std::memcpy(firstNop, callInstruction, instructionLength(callInstruction));
+			*(firstNop + instructionLength(firstNop) - 1) += 0x10;
 
 			size_t offset = 0;
 
-			bool secondDeref = callInstruction[InstructionLength(callInstruction) + 8] == 0x8b;
+			bool secondDeref = callInstruction[instructionLength(callInstruction) + 8] == 0x8b;
 
 			unsigned char* pushSequence = callInstruction;
 			while (true) {
@@ -99,7 +99,7 @@ Result MutateNextCall(std::byte* array, std::uintptr_t offset)
 		}
 
 		history.push_front(addr);
-		addr += InstructionLength(addr);
+		addr += instructionLength(addr);
 		if (*addr == 0x90) {
 			return ALREADY_TRANSFORMED;
 		}
@@ -107,9 +107,9 @@ Result MutateNextCall(std::byte* array, std::uintptr_t offset)
 	return FAILED; // ?
 }
 
-void ProcessObjectFile(const fs::path& file_path)
+void processObjectFile(const fs::path& file_path)
 {
-	static const std::string objdumpLine = ".text._ZN14RetAddrSpooferL6Invoke";
+	static const std::string objdumpLine = ".text._ZN14RetAddrSpooferL6invoke";
 
 	std::string path = fs::absolute(file_path).string();
 	std::cout << "Processing " << path << std::endl;
@@ -164,7 +164,7 @@ void ProcessObjectFile(const fs::path& file_path)
 	size_t skipped = 0;
 
 	for (auto offset : offsets) {
-		switch (MutateNextCall(array, offset)) {
+		switch (mutateNextCall(array, offset)) {
 		case SUCCESSFUL: {
 			std::cout << "Successfully mutated the function at " << std::hex << offset << std::dec << std::endl;
 			successful++;
@@ -192,14 +192,14 @@ void ProcessObjectFile(const fs::path& file_path)
 	fs.close();
 }
 
-void IterateFolder(std::string path)
+void iterateFolder(std::string path)
 {
 	for (const auto& entry : fs::directory_iterator(path)) {
 		const fs::path& file_path = entry.path();
 		if (fs::is_regular_file(file_path) && file_path.extension() == ".o") {
-			ProcessObjectFile(file_path);
+			processObjectFile(file_path);
 		} else if (fs::is_directory(file_path)) {
-			IterateFolder(file_path); // Recursively process subdirectories
+			iterateFolder(file_path); // Recursively process subdirectories
 		}
 	}
 }
@@ -211,6 +211,6 @@ int main(int argc, char** argv)
 		return 1;
 	}
 
-	IterateFolder(argv[1]);
+	iterateFolder(argv[1]);
 	return 0;
 }
