@@ -1,10 +1,6 @@
 name: CMake
 
-on:
-  push:
-    branches: [ "object-file-rewriter" ]
-  pull_request:
-    branches: [ "object-file-rewriter" ]
+on: [push, pull_request]
 
 env:
   BUILD_TYPE: Release
@@ -15,8 +11,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-      with:
-        submodules: true
 
     - name: Configure CMake
       run: cmake -B ${{github.workspace}}/Build
