@@ -1,9 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
+
+if(TARGET ReturnAddressSpoofer)
+	return()
+endif()
+
 project(ReturnAddressSpoofer)
-
-set(CMAKE_CXX_STANDARD 23)
-
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_library(ReturnAddressSpoofer INTERFACE)
 target_include_directories(ReturnAddressSpoofer INTERFACE "${PROJECT_SOURCE_DIR}/Include")
