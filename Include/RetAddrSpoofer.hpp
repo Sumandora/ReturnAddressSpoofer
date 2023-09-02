@@ -14,10 +14,10 @@ namespace RetAddrSpoofer {
 	 */
 	extern void* leaveRet;
 
-	template <typename Ret, typename... Args>
+	template <typename Ret, typename... Args> requires std::conjunction_v<std::negation<std::is_reference<Args>>...>
 	static Ret __attribute((noinline, optimize("O0"))) invoke(void* method, Args... args)
 	{
-		reinterpret_cast<Ret (*)(Args...)>(method)(std::forward<Args>(args)...);
+		reinterpret_cast<Ret (*)(Args...)>(method)(args...);
 
 		__asm("mov %0, %%rax;"
 			  :

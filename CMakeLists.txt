@@ -13,6 +13,7 @@ if(PROJECT_IS_TOP_LEVEL)
 	add_executable(ReturnAddressSpooferExample "${PROJECT_SOURCE_DIR}/Example/Main.cpp")
 	target_compile_options(ReturnAddressSpooferExample PUBLIC "-Ofast" "-ffunction-sections")
 	target_link_libraries(ReturnAddressSpooferExample PRIVATE ReturnAddressSpoofer)
+	target_compile_features(ReturnAddressSpooferExample PUBLIC cxx_std_20)
 
 	enable_testing()
 	add_test(NAME ReturnAddressSpooferExample COMMAND $<TARGET_FILE:ReturnAddressSpooferExample>)
