@@ -10,7 +10,7 @@ add_library(ReturnAddressSpoofer INTERFACE)
 target_include_directories(ReturnAddressSpoofer INTERFACE "${PROJECT_SOURCE_DIR}/Include")
 
 if(PROJECT_IS_TOP_LEVEL)
-	add_executable(ReturnAddressSpooferExample "${PROJECT_SOURCE_DIR}/Example/Main.cpp")
+	add_executable(ReturnAddressSpooferExample ${PROJECT_SOURCE_DIR}/Example/Main.cpp)
 	target_compile_options(ReturnAddressSpooferExample PUBLIC "-O2" "-ffunction-sections")
 	target_link_libraries(ReturnAddressSpooferExample PRIVATE ReturnAddressSpoofer)
 

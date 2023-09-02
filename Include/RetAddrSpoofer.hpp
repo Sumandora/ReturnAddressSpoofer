@@ -1,13 +1,7 @@
 #ifndef RETADDRSPOOFER_HPP
 #define RETADDRSPOOFER_HPP
 
-#include <atomic>
-#include <cstdio>
-#include <cstring>
-#include <mutex>
-#include <sys/mman.h>
-#include <type_traits>
-#include <unistd.h>
+#include <utility>
 
 namespace RetAddrSpoofer {
 
@@ -23,7 +17,7 @@ namespace RetAddrSpoofer {
 	template <typename Ret, typename... Args>
 	static Ret __attribute((noinline, optimize("O0"))) invoke(void* method, Args... args)
 	{
-		reinterpret_cast<Ret (*)(Args...)>(method)(args...);
+		reinterpret_cast<Ret (*)(Args...)>(method)(std::forward<Args>(args)...);
 
 		__asm("mov %0, %%rax;"
 			  :

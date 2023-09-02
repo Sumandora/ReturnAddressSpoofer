@@ -1,5 +1,6 @@
 #include <cassert>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <deque>
 #include <filesystem>
