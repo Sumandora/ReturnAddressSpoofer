@@ -1,10 +1,10 @@
-#include <filesystem>
-#include <deque>
-#include <cstring>
-#include <vector>
-#include <iostream>
-#include <fstream>
 #include <cassert>
+#include <cstring>
+#include <deque>
+#include <filesystem>
+#include <fstream>
+#include <iostream>
+#include <vector>
 
 #include "distorm.h"
 
@@ -129,7 +129,8 @@ void processObjectFile(const fs::path& file_path)
 
 			struct A {
 				std::string& line;
-				inline explicit A(std::string& line) : line(line) {};
+				inline explicit A(std::string& line)
+					: line(line){};
 				~A() { line.clear(); } // poor mans defer
 			} a{ line };
 
