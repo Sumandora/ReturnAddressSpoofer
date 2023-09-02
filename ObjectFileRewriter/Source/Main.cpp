@@ -1,13 +1,10 @@
-#include <cassert>
-#include <cstdint>
-#include <cstdio>
-#include <cstring>
-#include <deque>
 #include <filesystem>
-#include <fstream>
-#include <iostream>
-#include <string>
+#include <deque>
+#include <cstring>
 #include <vector>
+#include <iostream>
+#include <fstream>
+#include <cassert>
 
 #include "distorm.h"
 
@@ -19,7 +16,7 @@ enum Result {
 	ALREADY_TRANSFORMED
 };
 
-int instructionLength(unsigned char* addr)
+std::size_t instructionLength(unsigned char* addr)
 {
 	_DecodedInst inst;
 	unsigned int a = 0;
@@ -29,7 +26,7 @@ int instructionLength(unsigned char* addr)
 
 Result mutateNextCall(std::byte* array, std::uintptr_t offset)
 {
-	unsigned char* addr = reinterpret_cast<unsigned char*>(array + offset);
+	auto* addr = reinterpret_cast<unsigned char*>(array + offset);
 	std::deque<unsigned char*> history;
 	while (true) {
 		if (addr[0] == 0x48 && addr[1] == 0x8b && addr[2] == 0x05 && addr[3] == 0x00 && addr[4] == 0x00 && addr[5] == 0x00 && addr[6] == 0x00) {
@@ -132,6 +129,7 @@ void processObjectFile(const fs::path& file_path)
 
 			struct A {
 				std::string& line;
+				inline explicit A(std::string& line) : line(line) {};
 				~A() { line.clear(); } // poor mans defer
 			} a{ line };
 
@@ -186,14 +184,14 @@ void processObjectFile(const fs::path& file_path)
 
 	std::cout << "Processed " << offsets.size() << " calls (" << successful << " successful, " << failed << " failed, " << skipped << " skipped)" << std::endl;
 
-	assert(failed == 0);
+	assert(failed == 0); // This shouldn't happen, please tell me if it does.
 
 	fs.seekg(0, std::ios::beg);
 	fs.write(reinterpret_cast<char*>(array), size);
 	fs.close();
 }
 
-void iterateFolder(std::string path)
+void iterateFolder(const std::string& path)
 {
 	for (const auto& entry : fs::directory_iterator(path)) {
 		const fs::path& file_path = entry.path();
