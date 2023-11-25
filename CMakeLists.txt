@@ -1,8 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-if(TARGET ReturnAddressSpoofer)
-	return()
-endif()
+include_guard()
 
 project(ReturnAddressSpoofer)
 
