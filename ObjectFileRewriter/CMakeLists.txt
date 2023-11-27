@@ -4,7 +4,7 @@ project(ObjectFileRewriter)
 add_executable(ObjectFileRewriter Source/Main.cpp)
 
 target_compile_options(ObjectFileRewriter PRIVATE "-Ofast")
-target_compile_features(ObjectFileRewriter PUBLIC cxx_std_17)
+target_compile_features(ObjectFileRewriter PUBLIC cxx_std_20)
 
 include(FetchContent)
 

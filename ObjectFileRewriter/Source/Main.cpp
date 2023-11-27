@@ -1,199 +1,276 @@
+#include <any>
 #include <cassert>
 #include <cstring>
 #include <deque>
 #include <filesystem>
+#include <format>
 #include <fstream>
+#include <getopt.h>
 #include <iostream>
+#include <ranges>
+#include <span>
 #include <vector>
 
 #include "distorm.h"
 
 namespace fs = std::filesystem;
 
-enum Result {
-	SUCCESSFUL,
-	FAILED,
-	ALREADY_TRANSFORMED
+_DecodeType mode =
+#ifdef __x86_64
+	Decode64Bits
+#else
+	Decode32Bits
+#endif
+;
+
+struct DisassembleResult {
+	void* addr;
+	_DecodedInst inst;
 };
 
-std::size_t instructionLength(unsigned char* addr)
+DisassembleResult disassemble(void* addr)
 {
 	_DecodedInst inst;
-	unsigned int a = 0;
-	distorm_decode(0, addr, 0xFF, Decode64Bits, &inst, 1, &a);
-	return inst.size;
+	unsigned int used = 0;
+	distorm_decode(0, reinterpret_cast<unsigned char*>(addr), 0xFF, mode, &inst, 1, &used);
+	return { addr, inst };
 }
 
-Result mutateNextCall(std::byte* array, std::uintptr_t offset)
+enum class Result {
+	SUCCESSFUL,
+	FAILED,
+	ALREADY_MUTATED
+};
+
+Result mutateNextCall(std::span<std::byte> functionBytes)
 {
-	auto* addr = reinterpret_cast<unsigned char*>(array + offset);
-	std::deque<unsigned char*> history;
-	while (true) {
-		if (addr[0] == 0x48 && addr[1] == 0x8b && addr[2] == 0x05 && addr[3] == 0x00 && addr[4] == 0x00 && addr[5] == 0x00 && addr[6] == 0x00) {
-			// We found the mov 0x0(%rip),%rax
+	std::vector<DisassembleResult> mappedFunction;
+	std::byte* addr = &functionBytes.front();
 
-			if (history.size() < 2) {
-				__asm("int3");
-				return FAILED;
-			}
+	while(addr <= &functionBytes.back()) {
+		auto res = disassemble(addr);
+		std::cout << res.inst.mnemonic.p << " " << res.inst.operands.p << std::endl;
+		mappedFunction.push_back(res);
+		addr += res.inst.size;
+	}
 
-			unsigned char* callInstruction = nullptr;
-			size_t depth = 0;
-			while (!callInstruction || !((callInstruction[0] == 0x41 && callInstruction[1] == 0xff) || callInstruction[0] == 0xff)) {
-				if (depth > 2) {
-					__asm("int3");
-					return FAILED; // The call instruction shouldn't be that far away
-				}
-				callInstruction = history.front();
-				history.pop_front();
-				depth++;
-			}
+	auto isAlreadyMutated = [&]() {
+		for(auto it = mappedFunction.begin(); it != mappedFunction.end(); it++) {
+			auto currIt = it;
+			if(std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "NOP") != 0)
+				continue; // Must be NOP
 
-			unsigned char* firstNop = callInstruction;
+			currIt++;
+			if(std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "MOV") != 0)
+				continue; // Must be at least one MOV
 
-			while (*firstNop != 0x90) {
-				firstNop += instructionLength(firstNop);
-			}
+			currIt++;
+			while (std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "MOV") == 0)
+				currIt++; // Skip all MOVs
 
-			std::memcpy(firstNop, callInstruction, instructionLength(callInstruction));
-			*(firstNop + instructionLength(firstNop) - 1) += 0x10;
+			if(std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "PUSH") != 0)
+				continue; // Must be PUSH
 
-			size_t offset = 0;
+			currIt++;
+			if(std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "JMP") != 0)
+				continue; // Must be JMP
 
-			bool secondDeref = callInstruction[instructionLength(callInstruction) + 8] == 0x8b;
-
-			unsigned char* pushSequence = callInstruction;
-			while (true) {
-				unsigned int a = 0;
-				_DecodedInst inst;
-				distorm_decode(0, pushSequence, 0xFF, Decode64Bits, &inst, 1, &a);
-				if (std::strcmp("MOV", reinterpret_cast<const char*>(&inst.mnemonic.p[0])) == 0)
-					break;
-				pushSequence += inst.size;
-			}
-
-			if (*callInstruction != 0x41 && *(callInstruction + 1) == 0xd0) {
-
-				pushSequence[0] = 0x4c;
-				pushSequence[1] = 0x8b;
-				pushSequence[2] = 0x15;
-
-				if (secondDeref) {
-					pushSequence[7] = 0x4d;
-					pushSequence[8] = 0x8b;
-					pushSequence[9] = 0x12;
-				}
-
-				size_t i = secondDeref ? 10 : 7;
-
-				pushSequence[i] = 0x41;
-				pushSequence[i + 1] = 0x52;
-				offset++;
-			}
-
-			std::memset(callInstruction, 0x90, pushSequence - callInstruction);
-
-			return SUCCESSFUL;
+			return true;
 		}
+		return false;
+	};
 
-		history.push_front(addr);
-		addr += instructionLength(addr);
-		if (*addr == 0x90) {
-			return ALREADY_TRANSFORMED;
+	if(isAlreadyMutated())
+		return Result::ALREADY_MUTATED;
+
+	auto iterateUntil = [](const std::string& name, auto begin, auto end, auto cond) {
+		for(auto it = begin; it != end; it++) {
+			if (cond(it))
+				return it;
+		}
+		throw std::runtime_error(name + ": Iteration failed");
+	};
+
+	int nopCount = 0;
+	auto firstNop = iterateUntil("First NOP", mappedFunction.rbegin(), mappedFunction.rend(), [&nopCount](auto it) {
+		std::cout << it->inst.mnemonic.p << " " << nopCount << std::endl;
+ 		if (std::strcmp(reinterpret_cast<const char*>(it->inst.mnemonic.p), "NOP") == 0) {
+			nopCount++;
+			if(nopCount == 4)
+				return true;
+		} else
+			nopCount = 0;
+		return false;
+	});
+
+	auto movInstruction = iterateUntil("MOV instruction", firstNop + 1, mappedFunction.rend(), [](auto it) {
+		return std::strcmp(reinterpret_cast<const char*>((it+1)->inst.mnemonic.p), "MOV") != 0;
+	});
+
+	auto callInstruction = iterateUntil("CALL instruction", movInstruction, mappedFunction.rend(), [](auto it) {
+		return std::strcmp(reinterpret_cast<const char*>(it->inst.mnemonic.p), "CALL") == 0;
+	});
+
+	auto firstNopAddr = reinterpret_cast<unsigned char*>(firstNop->addr);
+	auto movInstructionAddr = reinterpret_cast<unsigned char*>(movInstruction->addr);
+	auto callInstructionAddr = reinterpret_cast<unsigned char*>(callInstruction->addr);
+
+	// Clear everything after the method ended (we are a noreturn, this will remove the ud2)
+	auto end = firstNopAddr + callInstruction->inst.size;
+	memset(end, 0x90, reinterpret_cast<unsigned char*>(&functionBytes.back()) - end);
+	functionBytes.back() = static_cast<std::byte>(0xCC); // int 3
+
+	// Move the call instruction down
+	memcpy(firstNop->addr, callInstruction->addr, callInstruction->inst.size);
+	memset(callInstruction->addr, 0x90, movInstructionAddr - callInstructionAddr);
+
+	// Convert call instruction to jmp instruction
+	*(firstNopAddr + callInstruction->inst.size - 1) += 0x10;
+
+	// Rewrite mov sequence to use counter when accumulator is in use
+	if(std::strstr(reinterpret_cast<char*>(callInstruction->inst.operands.p), "AX") &&
+		std::strstr(reinterpret_cast<char*>(movInstruction->inst.operands.p), "AX")) {
+		// Remember that we are still dealing with reverse iterators, when we subtract from those instructions, we actually go forward
+		switch (mode) {
+		case Decode64Bits: {
+			*(movInstructionAddr + 2) = *(movInstructionAddr + 1) != 0x8b ? 0x0c : 0x0d;
+			auto nextInstruction = movInstruction - 1;
+			if(std::strcmp(reinterpret_cast<const char*>(nextInstruction->inst.mnemonic.p), "MOV") == 0) {
+				*(reinterpret_cast<unsigned char*>(nextInstruction->addr) + 2) = 0x09;
+				nextInstruction--;
+			}
+			*reinterpret_cast<unsigned char*>(nextInstruction->addr) = 0x51;
+			break;
+		}
+		case Decode32Bits: {
+			bool clangOnO0 = movInstruction->inst.size == 4; // Don't ask clang is weird
+			*(movInstructionAddr + 1) = clangOnO0 ? 0x4C : 0x8B;
+			auto nextInstruction = movInstruction - 1;
+			if(clangOnO0 && std::strcmp(reinterpret_cast<const char*>(nextInstruction->inst.mnemonic.p), "MOV") == 0) {
+				*(reinterpret_cast<unsigned char*>(nextInstruction->addr) + 1) = 0x89;
+				nextInstruction--;
+			}
+			if(std::strcmp(reinterpret_cast<const char*>(nextInstruction->inst.mnemonic.p), "MOV") == 0) {
+				*(reinterpret_cast<unsigned char*>(nextInstruction->addr) + 1) = 0x09;
+				nextInstruction--;
+			}
+			*reinterpret_cast<unsigned char*>(nextInstruction->addr) = 0x51;
+			break;
+		}
+		default: break;
 		}
 	}
-	return FAILED; // ?
+
+	return Result::SUCCESSFUL;
 }
 
 void processObjectFile(const fs::path& file_path)
 {
-	static const std::string objdumpLine = ".text._ZN14RetAddrSpooferL6invoke";
+	static const std::string objdumpLine = ".text._ZN14RetAddrSpoofer6invoke";
 
 	std::string path = fs::absolute(file_path).string();
 	std::cout << "Processing " << path << std::endl;
 
 	FILE* objdump = popen(("objdump -h " + path).c_str(), "r");
 
-	std::vector<std::uintptr_t> offsets;
+	struct MutableFunction {
+		std::string name;
+		std::uintptr_t begin;
+		std::uintptr_t end;
 
-	char buffer[4096];
-	std::string line{};
-	while (!feof(objdump)) {
-		if (fgets(buffer, 4096, objdump) != nullptr) {
-			line += buffer;
-
-			char& last = line[line.size() - 1];
-
-			if (last != '\n' && last != '\0') // Is there more?
-				continue;
-
-			struct A {
-				std::string& line;
-				inline explicit A(std::string& line)
-					: line(line){};
-				~A() { line.clear(); } // poor mans defer
-			} a{ line };
-
-			if (line.empty())
-				continue;
-
-			if (line.find(objdumpLine) == std::string::npos) // Find the name of the function
-				continue;
-
-			auto offset = line.substr(line.find_first_not_of(' ')); // This is way more complicated than it should be:
-			for (size_t i = 0; i < 5; i++) {
-				offset = offset.substr(offset.find(' '));
-				offset = offset.substr(offset.find_first_not_of(' '));
-			}
-			offset = offset.substr(0, offset.find(' '));
-			offset = offset.substr(offset.find_first_not_of('0'));
-
-			offsets.push_back(std::stoll(offset, nullptr, 16));
+		MutableFunction(std::string&& name, std::uintptr_t begin, std::uintptr_t end)
+			: name(std::move(name))
+			, begin(begin)
+			, end(end)
+		{
 		}
+	};
+	std::vector<MutableFunction> mutableFunctions;
+
+	char* lineptr = nullptr;
+	size_t len = 0;
+	while (getline(&lineptr, &len, objdump) != -1) {
+		std::string line{ lineptr };
+		if (line.find(objdumpLine) == std::string::npos) // Find the name of the function
+			continue;
+
+		std::vector<std::string> tableLine; // { index, section.name, size, x, x, address, x }
+
+		std::string lineWalker = line;
+		while (!lineWalker.empty()) {
+			size_t next = lineWalker.find_first_not_of(' ');
+			if(next != std::string::npos)
+				lineWalker = lineWalker.substr(next);
+			size_t length = lineWalker.find(' ');
+			if(length == std::string::npos)
+				length = lineWalker.length();
+			tableLine.push_back(lineWalker.substr(0, length));
+			lineWalker = lineWalker.substr(length);
+		}
+
+		std::string name = tableLine.at(1);
+		std::string address = tableLine.at(5);
+		std::string size = tableLine.at(2);
+
+		// Remove prepended 0s
+		address = address.substr(address.find_first_not_of('0'));
+		size = size.substr(size.find_first_not_of('0'));
+
+		std::uintptr_t parsedAddress = std::stoll(address, nullptr, 16);
+		std::uintptr_t parsedSize = std::stoll(size, nullptr, 16);
+		mutableFunctions.emplace_back(std::move(name), parsedAddress, parsedAddress + parsedSize);
 	}
+
+	if (lineptr)
+		free(lineptr);
 
 	pclose(objdump);
 
 	std::fstream fs{ file_path, std::ios::in | std::ios::binary | std::ios::out };
-	auto size = fs::file_size(file_path);
-	std::byte array[size];
-	fs.read(reinterpret_cast<char*>(array), size);
+	auto fileSize = fs::file_size(file_path);
+	std::byte fileBytes[fileSize];
+	fs.read(reinterpret_cast<char*>(fileBytes), static_cast<long>(fileSize) /* this is very stupid, this implies that reading negative lengths is a thing */);
 
 	size_t successful = 0;
 	size_t failed = 0;
 	size_t skipped = 0;
 
-	for (auto offset : offsets) {
-		switch (mutateNextCall(array, offset)) {
-		case SUCCESSFUL: {
-			std::cout << "Successfully mutated the function at " << std::hex << offset << std::dec << std::endl;
+	for (const MutableFunction& function : mutableFunctions) {
+		std::string functionString = std::format("[{:x};{:x}]", function.begin, function.end);
+		switch (mutateNextCall(std::span<std::byte>{ fileBytes + function.begin, fileBytes + function.end })) {
+		case Result::SUCCESSFUL: {
+			std::cout << "Successfully mutated the function at " << functionString << std::endl;
 			successful++;
 			break;
 		}
-		case FAILED: {
-			std::cout << "Failed to mutate the function at " << std::hex << offset << std::dec << std::endl;
+		case Result::FAILED: {
+			std::cout << "Failed to mutate the function at " << functionString << std::endl;
 			failed++;
 			break;
 		}
-		case ALREADY_TRANSFORMED: {
-			std::cout << "Skipped the function at " << std::hex << offset << std::dec << ", because it was already mutated" << std::endl;
+		case Result::ALREADY_MUTATED: {
+			std::cout << "Skipped the function at " << functionString << ", because it was already mutated" << std::endl;
 			skipped++;
 			break;
 		}
 		}
 	}
 
-	std::cout << "Processed " << offsets.size() << " calls (" << successful << " successful, " << failed << " failed, " << skipped << " skipped)" << std::endl;
+	std::cout << "Processed " << mutableFunctions.size() << " calls (" << successful << " successful, " << failed << " failed, " << skipped << " skipped)" << std::endl;
 
 	assert(failed == 0); // This shouldn't happen, please tell me if it does.
 
 	fs.seekg(0, std::ios::beg);
-	fs.write(reinterpret_cast<char*>(array), size);
+	fs.write(reinterpret_cast<char*>(fileBytes), static_cast<long>(fileSize));
 	fs.close();
 }
 
 void iterateFolder(const std::string& path)
 {
+	if (fs::is_regular_file(path)) {
+		processObjectFile(path);
+		return;
+	}
 	for (const auto& entry : fs::directory_iterator(path)) {
 		const fs::path& file_path = entry.path();
 		if (fs::is_regular_file(file_path) && file_path.extension() == ".o") {
@@ -206,11 +283,49 @@ void iterateFolder(const std::string& path)
 
 int main(int argc, char** argv)
 {
-	if (argc != 2) {
-		std::cout << "Usage: ObjectFileRewriter <input folder>" << std::endl;
+	std::string inputPath;
+	int opt;
+	while((opt = getopt(argc, argv, "hi:m:")) != -1) {
+		switch (opt) {
+		case 'h':
+		default: {
+			std::cout << "Valid options:\n\t-i\tInput file/folder\n\t-m\tMode (amount of bits disassembled in)" << std::endl;
+			return 0;
+		}
+		case 'i': {
+			inputPath = optarg;
+			continue;
+		}
+		case 'm': {
+			auto bits = std::stoull(optarg, nullptr, 10);
+			switch (bits) {
+			case 16:
+				mode = Decode16Bits;
+				break;
+			case 32:
+				mode = Decode32Bits;
+				break;
+			case 64:
+				mode = Decode64Bits;
+				break;
+			default:
+				std::cerr << "Invalid amount of bits, only valid amounts are [16,32,64]" << std::endl;
+				return 1;
+			}
+			continue;
+		}
+		}
+	}
+
+	if(mode == Decode16Bits) {
+		std::cerr << "Warning: 16 bit mode is untested and is unlikely to work" << std::endl;
+	}
+
+	if(inputPath.empty()) {
+		std::cerr << "Input path is required" << std::endl;
 		return 1;
 	}
 
-	iterateFolder(argv[1]);
+	iterateFolder(inputPath);
 	return 0;
 }
