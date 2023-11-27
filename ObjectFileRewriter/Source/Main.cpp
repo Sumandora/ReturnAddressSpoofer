@@ -42,45 +42,50 @@ enum class Result {
 	ALREADY_MUTATED
 };
 
-Result mutateNextCall(std::span<std::byte> functionBytes)
-{
+std::vector<DisassembleResult> mapFunction(std::span<std::byte> functionBytes) {
 	std::vector<DisassembleResult> mappedFunction;
 	std::byte* addr = &functionBytes.front();
 
 	while(addr <= &functionBytes.back()) {
 		auto res = disassemble(addr);
-		std::cout << res.inst.mnemonic.p << " " << res.inst.operands.p << std::endl;
 		mappedFunction.push_back(res);
 		addr += res.inst.size;
 	}
 
-	auto isAlreadyMutated = [&]() {
-		for(auto it = mappedFunction.begin(); it != mappedFunction.end(); it++) {
-			auto currIt = it;
-			if(std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "NOP") != 0)
-				continue; // Must be NOP
+	return mappedFunction;
+}
 
-			currIt++;
-			if(std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "MOV") != 0)
-				continue; // Must be at least one MOV
+bool isAlreadyMutated(const std::vector<DisassembleResult>& mappedFunction) {
+	for(auto it = mappedFunction.begin(); it != mappedFunction.end(); it++) {
+		auto currIt = it;
+		if(std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "NOP") != 0)
+			continue; // Must be NOP
 
-			currIt++;
-			while (std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "MOV") == 0)
-				currIt++; // Skip all MOVs
+		currIt++;
+		if(std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "MOV") != 0)
+			continue; // Must be at least one MOV
 
-			if(std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "PUSH") != 0)
-				continue; // Must be PUSH
+		currIt++;
+		while (std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "MOV") == 0)
+			currIt++; // Skip all MOVs
 
-			currIt++;
-			if(std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "JMP") != 0)
-				continue; // Must be JMP
+		if(std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "PUSH") != 0)
+			continue; // Must be PUSH
 
-			return true;
-		}
-		return false;
-	};
+		currIt++;
+		if(std::strcmp(reinterpret_cast<const char*>(currIt->inst.mnemonic.p), "JMP") != 0)
+			continue; // Must be JMP
 
-	if(isAlreadyMutated())
+		return true;
+	}
+	return false;
+};
+
+Result mutateNextCall(std::span<std::byte> functionBytes)
+{
+	std::vector<DisassembleResult> mappedFunction = mapFunction(functionBytes);
+
+	if(isAlreadyMutated(mappedFunction))
 		return Result::ALREADY_MUTATED;
 
 	auto iterateUntil = [](const std::string& name, auto begin, auto end, auto cond) {
@@ -91,15 +96,12 @@ Result mutateNextCall(std::span<std::byte> functionBytes)
 		throw std::runtime_error(name + ": Iteration failed");
 	};
 
-	int nopCount = 0;
-	auto firstNop = iterateUntil("First NOP", mappedFunction.rbegin(), mappedFunction.rend(), [&nopCount](auto it) {
-		std::cout << it->inst.mnemonic.p << " " << nopCount << std::endl;
- 		if (std::strcmp(reinterpret_cast<const char*>(it->inst.mnemonic.p), "NOP") == 0) {
-			nopCount++;
-			if(nopCount == 4)
-				return true;
-		} else
-			nopCount = 0;
+	bool foundNop = false;
+	auto firstNop = iterateUntil("First NOP", mappedFunction.rbegin(), mappedFunction.rend(), [&foundNop](auto it) {
+		if (std::strcmp(reinterpret_cast<const char*>((it+1)->inst.mnemonic.p), "NOP") == 0)
+			foundNop = true;
+		else if (foundNop)
+			return true;
 		return false;
 	});
 
@@ -160,6 +162,8 @@ Result mutateNextCall(std::span<std::byte> functionBytes)
 		default: break;
 		}
 	}
+
+	assert(isAlreadyMutated(mapFunction(functionBytes))); // Is function mutated now?
 
 	return Result::SUCCESSFUL;
 }
@@ -237,6 +241,7 @@ void processObjectFile(const fs::path& file_path)
 
 	for (const MutableFunction& function : mutableFunctions) {
 		std::string functionString = std::format("[{:x};{:x}]", function.begin, function.end);
+		std::cout << "Mutating the function at " << functionString << std::endl;
 		switch (mutateNextCall(std::span<std::byte>{ fileBytes + function.begin, fileBytes + function.end })) {
 		case Result::SUCCESSFUL: {
 			std::cout << "Successfully mutated the function at " << functionString << std::endl;
