@@ -156,7 +156,7 @@ void processObjectFile(const fs::path& file_path)
 
 	std::fstream fs{ file_path, std::ios::in | std::ios::binary | std::ios::out };
 	auto size = fs::file_size(file_path);
-	std::byte array[size];
+	auto* array = new std::byte[size];
 	fs.read(reinterpret_cast<char*>(array), size);
 
 	size_t successful = 0;
