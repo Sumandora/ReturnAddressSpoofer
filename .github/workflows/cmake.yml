@@ -12,12 +12,5 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Configure CMake
-      run: cmake -B ${{github.workspace}}/Build
-
-    - name: Build
-      run: cmake --build ${{github.workspace}}/Build
-
-    - name: Test
-      working-directory: ${{github.workspace}}/Build
-      run: ctest
+    - name: Running tests
+      run: python run_tests.py
