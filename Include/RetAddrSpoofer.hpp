@@ -1,52 +1,66 @@
 #ifndef RETADDRSPOOFER_HPP
 #define RETADDRSPOOFER_HPP
 
-#include <utility>
-
 namespace RetAddrSpoofer {
 
-	/*
-	 * Explanation for leaveRet:
+	/**
 	 * The return address spoofer expects this to be set
 	 * This has to be a byte-sequence which contains the following:
+	 * For x86:
 	 * c9	leave
+	 * c3	ret
+	 * For x86-64:
 	 * c3	ret
 	 */
 	extern const void* leaveRet;
 
+#ifdef __x86_64
+	template <typename... Args>
+	void* get_target(Args... /*args*/, void* target)
+	{
+		return target;
+	}
 
-#pragma diagnostic push
-#pragma GCC diagnostic ignored "-Wreturn-type"
-#pragma push_options
-#pragma GCC optimize("no-omit-frame-pointer")
-	template <typename Ret, typename... Args> requires std::conjunction_v<std::negation<std::is_reference<Args>>...>
-	Ret __attribute((noinline, force_align_arg_pointer,
+	template <typename Ret, typename... Args>
+	__attribute((naked)) Ret inner_invoke(Args... args, void* target)
+	{
+		// NOLINTNEXTLINE(hicpp-no-assembler)
+		asm(
+			"call *%0;"
+			"push %1;"
+			"jmp *%%rax;"
+			:
+			: "r"(get_target<Args...>), "m"(leaveRet));
+	}
+
+	template <typename Ret, typename... Args>
+	Ret invoke(void* target, Args... args)
+	{
+		return inner_invoke<Ret, Args...>(args..., target);
+	}
+#else
+	template <typename Ret, typename... Args>
+	__attribute((naked)) Ret inner_invoke(void* target, const void* gadget, Args... args)
+	{
+		// NOLINTNEXTLINE(hicpp-no-assembler)
+		asm("pop %eax;"
+			"pop %eax;"
+			"jmp *%eax;");
+	}
+
+	template <typename Ret, typename... Args>
+	__attribute((noinline, force_align_arg_pointer,
 #ifdef __clang__
 		optnone
 #else
 		optimize("O0")
 #endif
-		)) invoke(void* method, Args... args)
+		)) Ret
+	invoke(void* target, Args... args)
 	{
-		reinterpret_cast<Ret (*)(Args...)>(method)(args...);
-
-#ifdef __x86_64
-#define ACCUMULATOR "rax"
-#else
-#define ACCUMULATOR "eax"
-#endif
-		asm volatile("mov %0, %%" ACCUMULATOR ";"
-			:
-			: "m"(leaveRet));
-		asm volatile("push %" ACCUMULATOR ";"
-#undef ACCUMULATOR
-			"nop;"
-			"nop;"
-			"nop;"
-			"nop;");
+		return inner_invoke<Ret, Args...>(target, leaveRet, args...);
 	}
-#pragma pop_options
-#pragma diagnostic pop
+#endif
 
 }
 #endif
