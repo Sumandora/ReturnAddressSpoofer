@@ -10,6 +10,11 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+    - name: Install dependencies
+      run: |
+        sudo apt update
+        sudo apt install gcc-multilib g++-multilib
+
     - uses: actions/checkout@v3
 
     - name: Running tests
