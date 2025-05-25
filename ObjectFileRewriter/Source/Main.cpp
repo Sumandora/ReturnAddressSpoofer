@@ -1,14 +1,19 @@
-#include <any>
 #include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
-#include <deque>
 #include <filesystem>
 #include <format>
 #include <fstream>
 #include <getopt.h>
 #include <iostream>
-#include <ranges>
 #include <span>
+#include <stdexcept>
+#include <stdio.h>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "distorm.h"
@@ -232,8 +237,8 @@ void processObjectFile(const fs::path& file_path)
 
 	std::fstream fs{ file_path, std::ios::in | std::ios::binary | std::ios::out };
 	auto fileSize = fs::file_size(file_path);
-	std::byte fileBytes[fileSize];
-	fs.read(reinterpret_cast<char*>(fileBytes), static_cast<long>(fileSize) /* this is very stupid, this implies that reading negative lengths is a thing */);
+	std::byte* fileBytes = new std::byte[fileSize];
+	fs.read(reinterpret_cast<char*>(fileBytes), static_cast<long>(fileSize) /* This is very stupid, this implies that reading negative lengths is a thing */);
 
 	size_t successful = 0;
 	size_t failed = 0;
