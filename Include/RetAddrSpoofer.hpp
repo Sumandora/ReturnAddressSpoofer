@@ -14,17 +14,20 @@ namespace RetAddrSpoofer {
 	 */
 	extern const void* leaveRet;
 
-
+	// NOLINTBEGIN
 #pragma push_options
 #pragma GCC optimize("no-omit-frame-pointer")
-	template <typename Ret, typename... Args> requires std::conjunction_v<std::negation<std::is_reference<Args>>...>
+	// NOLINTEND
+	template <typename Ret, typename... Args>
+		requires std::conjunction_v<std::negation<std::is_reference<Args>>...>
 	Ret __attribute((noinline, force_align_arg_pointer,
 #ifdef __clang__
 		optnone
 #else
 		optimize("O0")
 #endif
-		)) invoke(void* method, Args... args)
+		))
+	invoke(void* method, Args... args)
 	{
 		reinterpret_cast<Ret (*)(Args...)>(method)(args...);
 
@@ -38,12 +41,18 @@ namespace RetAddrSpoofer {
 			: "m"(leaveRet));
 		asm volatile("push %" ACCUMULATOR ";"
 #undef ACCUMULATOR
-			"nop;"
-			"nop;"
-			"nop;"
-			"nop;");
+					 "nop;"
+					 "nop;"
+					 "nop;"
+					 "nop;");
+		// NOLINTBEGIN
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-type"
+		__asm("");
 	}
+#pragma GCC diagnostic pop
 #pragma pop_options
+	// NOLINTEND
 
 }
 #endif
