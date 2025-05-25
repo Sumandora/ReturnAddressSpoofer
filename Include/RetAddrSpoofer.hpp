@@ -1,7 +1,7 @@
 #ifndef RETADDRSPOOFER_HPP
 #define RETADDRSPOOFER_HPP
 
-#include <utility>
+#include <type_traits>
 
 namespace RetAddrSpoofer {
 
@@ -15,8 +15,6 @@ namespace RetAddrSpoofer {
 	extern const void* leaveRet;
 
 
-#pragma diagnostic push
-#pragma GCC diagnostic ignored "-Wreturn-type"
 #pragma push_options
 #pragma GCC optimize("no-omit-frame-pointer")
 	template <typename Ret, typename... Args> requires std::conjunction_v<std::negation<std::is_reference<Args>>...>
@@ -46,7 +44,6 @@ namespace RetAddrSpoofer {
 			"nop;");
 	}
 #pragma pop_options
-#pragma diagnostic pop
 
 }
 #endif
