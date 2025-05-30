@@ -15,7 +15,7 @@ namespace RetAddrSpoofer {
 	extern const void* leaveRet;
 
 	// NOLINTBEGIN
-#pragma push_options
+#pragma GCC push_options
 #pragma GCC optimize("no-omit-frame-pointer")
 	// NOLINTEND
 	template <typename Ret, typename... Args>
@@ -51,7 +51,7 @@ namespace RetAddrSpoofer {
 		__asm("");
 	}
 #pragma GCC diagnostic pop
-#pragma pop_options
+#pragma GCC pop_options
 	// NOLINTEND
 
 }
