@@ -2,6 +2,7 @@
 #define RETADDRSPOOFER_HPP
 
 #include <type_traits>
+#include <utility>
 
 namespace RetAddrSpoofer {
 
@@ -54,5 +55,11 @@ namespace RetAddrSpoofer {
 #pragma GCC pop_options
 	// NOLINTEND
 
+	template <typename Ret, typename... Args>
+		requires std::conjunction_v<std::negation<std::is_reference<Args>>...>
+	__attribute((always_inline)) constexpr Ret invoke(Ret (*method)(Args...), Args... args)
+	{
+		return invoke<Ret, Args...>(reinterpret_cast<void*>(method), std::forward<Args>(args)...);
+	}
 }
 #endif
